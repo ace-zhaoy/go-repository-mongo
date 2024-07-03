@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"time"
 )
 
 type CrudRepository[ID comparable, ENTITY contract.ENTITY[ID]] struct {
@@ -43,10 +44,13 @@ func (c *CrudRepository[ID, ENTITY]) clone() *CrudRepository[ID, ENTITY] {
 	}
 }
 
-func (c *CrudRepository[ID, ENTITY]) buildFilter() bson.D {
-	filter := bson.D{}
-	if !c.unscoped {
-		filter = append(filter, bson.E{
+func (c *CrudRepository[ID, ENTITY]) buildFilter(filter map[string]any) bson.D {
+	d := bson.D{}
+	umap.Foreach(filter, func(k string, v any) {
+		d = append(d, bson.E{Key: k, Value: v})
+	})
+	if c.softDeleteEnabled && !c.unscoped {
+		d = append(d, bson.E{
 			Key: "$or", Value: bson.A{
 				bson.M{"deleted_at": 0},
 				bson.M{"deleted_at": bson.M{"$exists": false}},
@@ -54,7 +58,7 @@ func (c *CrudRepository[ID, ENTITY]) buildFilter() bson.D {
 		})
 	}
 
-	return filter
+	return d
 }
 
 func (c *CrudRepository[ID, ENTITY]) IsUnscoped() bool {
@@ -97,9 +101,7 @@ func (c *CrudRepository[ID, ENTITY]) Create(ctx context.Context, entity ENTITY) 
 
 func (c *CrudRepository[ID, ENTITY]) FindByID(ctx context.Context, id ID) (entity ENTITY, err error) {
 	defer errors.Recover(func(e error) { err = errors.Wrap(e, "param: %v", id) })
-	filter := c.buildFilter()
-	filter = append(filter, bson.E{Key: c.idField, Value: id})
-
+	filter := c.buildFilter(bson.M{c.idField: id})
 	err = c.collection.FindOne(ctx, filter).Decode(&entity)
 	if err != nil && errors.Is(err, mongo.ErrNoDocuments) {
 		err = repository.ErrNotFound.WrapStack(err)
@@ -116,9 +118,7 @@ func (c *CrudRepository[ID, ENTITY]) FindByIDs(ctx context.Context, ids []ID) (c
 		return
 	}
 
-	filter := c.buildFilter()
-	filter = append(filter, bson.E{Key: c.idField, Value: bson.M{"$in": ids}})
-
+	filter := c.buildFilter(bson.M{c.idField: bson.M{"$in": ids}})
 	cursor, err := c.collection.Find(ctx, filter)
 	errors.Check(errors.WithStack(err))
 	err = cursor.All(ctx, &entities)
@@ -135,7 +135,7 @@ func (c *CrudRepository[ID, ENTITY]) FindByPage(ctx context.Context, limit, offs
 		opts.SetSort(OrdersToSort(orders))
 	}
 
-	filter := c.buildFilter()
+	filter := c.buildFilter(bson.M{})
 	cursor, err := c.collection.Find(ctx, filter, opts)
 	errors.Check(errors.WithStack(err))
 
@@ -149,12 +149,8 @@ func (c *CrudRepository[ID, ENTITY]) FindByPage(ctx context.Context, limit, offs
 
 func (c *CrudRepository[ID, ENTITY]) FindByFilter(ctx context.Context, filter map[string]any) (collection contract.Collection[ID, ENTITY], err error) {
 	defer errors.Recover(func(e error) { err = e })
-	fi := c.buildFilter()
-	umap.Foreach(filter, func(k string, v any) {
-		fi = append(fi, bson.E{Key: k, Value: v})
-	})
 
-	cursor, err := c.collection.Find(ctx, filter)
+	cursor, err := c.collection.Find(ctx, c.buildFilter(filter))
 	errors.Check(errors.WithStack(err))
 
 	var entities []ENTITY
@@ -167,17 +163,13 @@ func (c *CrudRepository[ID, ENTITY]) FindByFilter(ctx context.Context, filter ma
 
 func (c *CrudRepository[ID, ENTITY]) FindByFilterWithPage(ctx context.Context, filter map[string]any, limit, offset int, orders ...contract.Order) (collection contract.Collection[ID, ENTITY], err error) {
 	defer errors.Recover(func(e error) { err = e })
-	fi := c.buildFilter()
-	umap.Foreach(filter, func(k string, v any) {
-		fi = append(fi, bson.E{Key: k, Value: v})
-	})
 
 	opts := options.Find().SetSkip(int64(offset)).SetLimit(int64(limit))
 	if len(orders) > 0 {
 		opts.SetSort(OrdersToSort(orders))
 	}
 
-	cursor, err := c.collection.Find(ctx, fi, opts)
+	cursor, err := c.collection.Find(ctx, c.buildFilter(filter), opts)
 	errors.Check(errors.WithStack(err))
 
 	var entities []ENTITY
@@ -190,7 +182,7 @@ func (c *CrudRepository[ID, ENTITY]) FindByFilterWithPage(ctx context.Context, f
 
 func (c *CrudRepository[ID, ENTITY]) FindAll(ctx context.Context) (collection contract.Collection[ID, ENTITY], err error) {
 	defer errors.Recover(func(e error) { err = e })
-	cursor, err := c.collection.Find(ctx, c.buildFilter())
+	cursor, err := c.collection.Find(ctx, c.buildFilter(bson.M{}))
 	errors.Check(errors.WithStack(err))
 
 	var entities []ENTITY
@@ -203,7 +195,7 @@ func (c *CrudRepository[ID, ENTITY]) FindAll(ctx context.Context) (collection co
 
 func (c *CrudRepository[ID, ENTITY]) Count(ctx context.Context) (count int, err error) {
 	defer errors.Recover(func(e error) { err = e })
-	cnt, err := c.collection.CountDocuments(ctx, c.buildFilter())
+	cnt, err := c.collection.CountDocuments(ctx, c.buildFilter(bson.M{}))
 	errors.Check(errors.WithStack(err))
 	count = int(cnt)
 	return
@@ -211,11 +203,7 @@ func (c *CrudRepository[ID, ENTITY]) Count(ctx context.Context) (count int, err 
 
 func (c *CrudRepository[ID, ENTITY]) CountByFilter(ctx context.Context, filter map[string]any) (count int, err error) {
 	defer errors.Recover(func(e error) { err = e })
-	fil := c.buildFilter()
-	umap.Foreach(filter, func(k string, v any) {
-		fil = append(fil, bson.E{Key: k, Value: v})
-	})
-	cnt, err := c.collection.CountDocuments(ctx, fil)
+	cnt, err := c.collection.CountDocuments(ctx, c.buildFilter(filter))
 	errors.Check(errors.WithStack(err))
 	count = int(cnt)
 	return
@@ -223,13 +211,9 @@ func (c *CrudRepository[ID, ENTITY]) CountByFilter(ctx context.Context, filter m
 
 func (c *CrudRepository[ID, ENTITY]) Exists(ctx context.Context, filter map[string]any) (exists bool, err error) {
 	defer errors.Recover(func(e error) { err = e })
-	fil := c.buildFilter()
-	umap.Foreach(filter, func(k string, v any) {
-		fil = append(fil, bson.E{Key: k, Value: v})
-	})
 
 	opts := options.FindOne().SetProjection(bson.D{{c.idField, 1}})
-	err = c.collection.FindOne(ctx, filter, opts).Err()
+	err = c.collection.FindOne(ctx, c.buildFilter(filter), opts).Err()
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return false, nil
 	}
@@ -239,9 +223,7 @@ func (c *CrudRepository[ID, ENTITY]) Exists(ctx context.Context, filter map[stri
 
 func (c *CrudRepository[ID, ENTITY]) ExistsByID(ctx context.Context, id ID) (exists bool, err error) {
 	defer errors.Recover(func(e error) { err = e })
-	filter := c.buildFilter()
-	filter = append(filter, bson.E{Key: c.idField, Value: id})
-
+	filter := c.buildFilter(bson.M{c.idField: id})
 	opts := options.FindOne().SetProjection(bson.D{{c.idField, 1}})
 	err = c.collection.FindOne(ctx, filter, opts).Err()
 	if errors.Is(err, mongo.ErrNoDocuments) {
@@ -258,8 +240,7 @@ func (c *CrudRepository[ID, ENTITY]) ExistsByIDs(ctx context.Context, ids []ID) 
 		return
 	}
 
-	filter := c.buildFilter()
-	filter = append(filter, bson.E{Key: c.idField, Value: bson.M{"$in": ids}})
+	filter := c.buildFilter(bson.M{c.idField: bson.M{"$in": ids}})
 	opts := options.Find().SetProjection(bson.D{{c.idField, 1}})
 	cursor, err := c.collection.Find(ctx, filter, opts)
 	errors.Check(errors.WithStack(err))
@@ -278,14 +259,14 @@ func (c *CrudRepository[ID, ENTITY]) ExistsByIDs(ctx context.Context, ids []ID) 
 
 func (c *CrudRepository[ID, ENTITY]) Update(ctx context.Context, filter map[string]any, data map[string]any) (err error) {
 	defer errors.Recover(func(e error) { err = e })
-	_, err = c.collection.UpdateMany(ctx, filter, bson.M{"$set": data})
+	_, err = c.collection.UpdateMany(ctx, c.buildFilter(filter), bson.M{"$set": data})
 	errors.Check(errors.WithStack(err))
 	return
 }
 
 func (c *CrudRepository[ID, ENTITY]) UpdateByID(ctx context.Context, id ID, data map[string]any) (err error) {
 	defer errors.Recover(func(e error) { err = e })
-	_, err = c.collection.UpdateOne(ctx, bson.M{c.idField: id}, bson.M{"$set": data})
+	_, err = c.collection.UpdateOne(ctx, c.buildFilter(bson.M{c.idField: id}), bson.M{"$set": data})
 	errors.Check(errors.WithStack(err))
 	return
 }
@@ -297,7 +278,7 @@ func (c *CrudRepository[ID, ENTITY]) UpdateNonZero(ctx context.Context, filter m
 		return
 	}
 
-	_, err = c.collection.UpdateMany(ctx, filter, bson.M{"$set": data})
+	_, err = c.collection.UpdateMany(ctx, c.buildFilter(filter), bson.M{"$set": data})
 	errors.Check(errors.WithStack(err))
 	return
 }
@@ -309,13 +290,24 @@ func (c *CrudRepository[ID, ENTITY]) UpdateNonZeroByID(ctx context.Context, id I
 		return
 	}
 
-	_, err = c.collection.UpdateOne(ctx, bson.M{c.idField: id}, bson.M{"$set": data})
+	_, err = c.collection.UpdateOne(ctx, c.buildFilter(bson.M{c.idField: id}), bson.M{"$set": data})
 	errors.Check(errors.WithStack(err))
+	return
+}
+
+func (c *CrudRepository[ID, ENTITY]) softDelete(ctx context.Context, filter map[string]any) (err error) {
+	defer errors.Recover(func(e error) { err = e })
+	err = c.Update(ctx, filter, bson.M{c.softDeleteField: time.Now().Unix()})
+	errors.Check(err)
 	return
 }
 
 func (c *CrudRepository[ID, ENTITY]) Delete(ctx context.Context, filter map[string]any) (err error) {
 	defer errors.Recover(func(e error) { err = e })
+	if c.softDeleteEnabled && !c.unscoped {
+		errors.Check(c.softDelete(ctx, filter))
+		return
+	}
 	_, err = c.collection.DeleteMany(ctx, filter)
 	errors.Check(errors.WithStack(err))
 	return
@@ -323,7 +315,12 @@ func (c *CrudRepository[ID, ENTITY]) Delete(ctx context.Context, filter map[stri
 
 func (c *CrudRepository[ID, ENTITY]) DeleteByID(ctx context.Context, id ID) (err error) {
 	defer errors.Recover(func(e error) { err = e })
-	_, err = c.collection.DeleteOne(ctx, bson.M{c.idField: id})
+	filter := bson.M{c.idField: id}
+	if c.softDeleteEnabled && !c.unscoped {
+		errors.Check(c.softDelete(ctx, filter))
+		return
+	}
+	_, err = c.collection.DeleteOne(ctx, filter)
 	errors.Check(errors.WithStack(err))
 	return
 }
@@ -333,20 +330,34 @@ func (c *CrudRepository[ID, ENTITY]) DeleteByIDs(ctx context.Context, ids []ID) 
 	if len(ids) == 0 {
 		return
 	}
-	_, err = c.collection.DeleteMany(ctx, bson.M{c.idField: bson.M{"$in": ids}})
+	filter := bson.M{c.idField: bson.M{"$in": ids}}
+	if c.softDeleteEnabled && !c.unscoped {
+		errors.Check(c.softDelete(ctx, filter))
+		return
+	}
+	_, err = c.collection.DeleteMany(ctx, filter)
 	errors.Check(errors.WithStack(err))
 	return
 }
 
 func (c *CrudRepository[ID, ENTITY]) DeleteAll(ctx context.Context) (err error) {
 	defer errors.Recover(func(e error) { err = e })
-	_, err = c.collection.DeleteMany(ctx, bson.M{})
+	filter := bson.M{}
+	if c.softDeleteEnabled && !c.unscoped {
+		errors.Check(c.softDelete(ctx, filter))
+		return
+	}
+	_, err = c.collection.DeleteMany(ctx, filter)
 	errors.Check(errors.WithStack(err))
 	return
 }
 
 func (c *CrudRepository[ID, ENTITY]) DeleteAllByFilter(ctx context.Context, filter map[string]any) (err error) {
 	defer errors.Recover(func(e error) { err = e })
+	if c.softDeleteEnabled && !c.unscoped {
+		errors.Check(c.softDelete(ctx, filter))
+		return
+	}
 	_, err = c.collection.DeleteMany(ctx, filter)
 	errors.Check(errors.WithStack(err))
 	return
