@@ -3,7 +3,7 @@
 
 # 使用
 ```shell
-go get github.com/ace-zhaoy/go-repository-gorm
+go get github.com/ace-zhaoy/go-repository-mongo
 ```
 ## 快速使用
 ```go
