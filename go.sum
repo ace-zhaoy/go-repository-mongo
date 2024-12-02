@@ -10,8 +10,10 @@ github.com/ace-zhaoy/errors v1.0.3 h1:yQUIc8KoB0zVwS+SYkfqyKkl/PtLTNx+g0lbo56frP
 github.com/ace-zhaoy/errors v1.0.3/go.mod h1:6EeI3Q+n4cQn7GAZUYa2OCN9/w1HCgO8trdVOawnJXE=
 github.com/ace-zhaoy/go-id v1.0.5 h1:uQCEGQGGvxCF1s4BPnitVlY74aUIHBDLMcEV7YDBmfY=
 github.com/ace-zhaoy/go-id v1.0.5/go.mod h1:iWhWYN0x90dQkVGYGR6/VoshAyBUUUGDUnU6kQQuhm4=
-github.com/ace-zhaoy/go-repository v1.0.3 h1:ngtnTmBke61saGe+U+wTjak5DrIYWU8AsSFkcqRrqJ8=
-github.com/ace-zhaoy/go-repository v1.0.3/go.mod h1:ISJc7opK32DkgAsf0xc3A0Ax4o6bPL1uuSXT5SNFgKo=
+github.com/ace-zhaoy/go-id v1.0.6 h1:wr5b6pGWXlUr8Wd4903wrzur92J0s1OvCXdyPLiwvmM=
+github.com/ace-zhaoy/go-id v1.0.6/go.mod h1:iWhWYN0x90dQkVGYGR6/VoshAyBUUUGDUnU6kQQuhm4=
+github.com/ace-zhaoy/go-repository v1.0.4 h1:o7KVP3JCRupLt49/ymoGxv1sWqSBe/SpcnOPEOAfEtU=
+github.com/ace-zhaoy/go-repository v1.0.4/go.mod h1:ISJc7opK32DkgAsf0xc3A0Ax4o6bPL1uuSXT5SNFgKo=
 github.com/ace-zhaoy/go-utils v1.2.2 h1:H5wAmPPWq1bDnA/1TeZQ+nW4ICCCkURkInLCKodKgKY=
 github.com/ace-zhaoy/go-utils v1.2.2/go.mod h1:jrzTKdKmxnx+ETiQuaTVaA9IVhHvdpRzvkorXzGIKXs=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=

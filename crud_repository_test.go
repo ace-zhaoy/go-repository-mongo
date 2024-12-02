@@ -10,6 +10,7 @@ import (
 	"github.com/magiconair/properties/assert"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
@@ -179,6 +180,70 @@ func TestCrudRepository_Create_DuplicateKey(t *testing.T) {
 	errors.Check(errors.Wrap(err, "failed to create user"))
 	_, err = userRepository.Create(context.Background(), &user)
 	assert.Equal(t, errors.Is(err, repository.ErrDuplicatedKey), true)
+}
+
+func TestCrudRepository_FindOne(t *testing.T) {
+	defer errors.Recover(func(e error) { log.Fatalf("TestCrudRepository_FindOne err: %+v", e) })
+	db, teardown := getDatabase()
+	defer teardown()
+	userRepository := NewCrudRepository[int64, *User](db.Collection("user"))
+
+	user := User{
+		ID:   idGen.Generate(),
+		Name: "test",
+	}
+	_, err := userRepository.Create(context.Background(), &user)
+	errors.Check(errors.Wrap(err, "failed to create user"))
+
+	foundUser, err := userRepository.FindOne(context.Background(), map[string]any{
+		"name": "test",
+	})
+	errors.Check(errors.Wrap(err, "failed to find user"))
+	assert.Equal(t, foundUser.Name, user.Name)
+
+	_, err = userRepository.FindOne(context.Background(), map[string]any{
+		"name": "nonexistent",
+	})
+	assert.Equal(t, errors.Is(err, repository.ErrNotFound), true)
+}
+
+func TestCrudRepository_FindOne_WithOrder(t *testing.T) {
+	defer errors.Recover(func(e error) { log.Fatalf("TestCrudRepository_FindOne_WithOrder err: %+v", e) })
+	db, teardown := getDatabase()
+	defer teardown()
+	userRepository := NewCrudRepository[int64, *User](db.Collection("user"))
+
+	user1 := User{
+		ID:   idGen.Generate(),
+		Name: "test1",
+	}
+	_, err := userRepository.Create(context.Background(), &user1)
+	errors.Check(errors.Wrap(err, "failed to create user1"))
+
+	user2 := User{
+		ID:   idGen.Generate(),
+		Name: "test2",
+	}
+	_, err = userRepository.Create(context.Background(), &user2)
+	errors.Check(errors.Wrap(err, "failed to create user2"))
+
+	foundUser, err := userRepository.FindOne(context.Background(), map[string]any{
+		"name": bson.M{"$regex": "test"},
+	}, contract.Order{
+		Key:   "name",
+		Value: -1,
+	})
+	errors.Check(errors.Wrap(err, "failed to find user with order"))
+	assert.Equal(t, foundUser.Name, user2.Name)
+
+	foundUser, err = userRepository.FindOne(context.Background(), map[string]any{
+		"name": bson.M{"$regex": "test"},
+	}, contract.Order{
+		Key:   "name",
+		Value: 1,
+	})
+	errors.Check(errors.Wrap(err, "failed to find user with order"))
+	assert.Equal(t, foundUser.Name, user1.Name)
 }
 
 func TestCrudRepository_FindByID(t *testing.T) {
