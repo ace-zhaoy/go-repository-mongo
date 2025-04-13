@@ -365,6 +365,52 @@ func TestCrudRepository_FindByFilter(t *testing.T) {
 	assert.Equal(t, collection2.Count(), 0)
 }
 
+func TestCrudRepository_FindByFilterWithSort(t *testing.T) {
+	defer errors.Recover(func(e error) { log.Fatalf("TestCrudRepository_FindByFilterWithSort err: %+v", e) })
+	db, teardown := getDatabase()
+	defer teardown()
+	userRepository := NewCrudRepository[int64, *User](db.Collection("user"))
+
+	// 创建测试数据
+	user1 := User{
+		ID:   idGen.Generate(),
+		Name: "Alice",
+	}
+	_, err := userRepository.Create(context.Background(), &user1)
+	errors.Check(errors.Wrap(err, "failed to create user1"))
+
+	user2 := User{
+		ID:   idGen.Generate(),
+		Name: "Bob",
+	}
+	_, err = userRepository.Create(context.Background(), &user2)
+	errors.Check(errors.Wrap(err, "failed to create user2"))
+
+	// 按名称降序排序
+	collection, err := userRepository.FindByFilterWithSort(context.Background(), map[string]any{
+		"name": bson.M{"$regex": ".*"},
+	}, contract.Order{
+		Key:   "name",
+		Value: -1,
+	})
+	errors.Check(errors.Wrap(err, "failed to find users with sort"))
+	assert.Equal(t, collection.Count(), 2)
+	assert.Equal(t, collection.All()[0].Name, "Bob")
+	assert.Equal(t, collection.All()[1].Name, "Alice")
+
+	// 按名称升序排序
+	collection, err = userRepository.FindByFilterWithSort(context.Background(), map[string]any{
+		"name": bson.M{"$regex": ".*"},
+	}, contract.Order{
+		Key:   "name",
+		Value: 1,
+	})
+	errors.Check(errors.Wrap(err, "failed to find users with sort"))
+	assert.Equal(t, collection.Count(), 2)
+	assert.Equal(t, collection.All()[0].Name, "Alice")
+	assert.Equal(t, collection.All()[1].Name, "Bob")
+}
+
 func TestCrudRepository_FindByFilterWithPage(t *testing.T) {
 	defer errors.Recover(func(e error) { log.Fatalf("TestCrudRepository_FindByFilterWithPage err: %+v", e) })
 	db, teardown := getDatabase()

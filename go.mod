@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/ace-zhaoy/errors v1.0.3
 	github.com/ace-zhaoy/go-id v1.0.6
-	github.com/ace-zhaoy/go-repository v1.0.4
+	github.com/ace-zhaoy/go-repository v1.0.5
 	github.com/ace-zhaoy/go-utils v1.2.2
 	github.com/magiconair/properties v1.8.7
 	github.com/testcontainers/testcontainers-go v0.18.0
