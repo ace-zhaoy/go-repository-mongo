@@ -113,6 +113,22 @@ func (c *CrudRepository[ID, ENTITY]) FindOne(ctx context.Context, filter map[str
 	return
 }
 
+func (c *CrudRepository[ID, ENTITY]) FindOneWithExists(ctx context.Context, filter map[string]any, orders ...contract.Order) (entity ENTITY, exists bool, err error) {
+	defer errors.Recover(func(e error) { err = errors.Wrap(e, "param: %v, %v", filter, orders) })
+	opts := options.FindOne()
+	if len(orders) > 0 {
+		opts.SetSort(OrdersToSort(orders))
+	}
+	err = c.collection.FindOne(ctx, c.buildFilter(filter), opts).Decode(&entity)
+	if err == nil {
+		exists = true
+	} else if errors.Is(err, mongo.ErrNoDocuments) {
+		err = nil
+	}
+	errors.CheckWithStack(err)
+	return
+}
+
 func (c *CrudRepository[ID, ENTITY]) FindByID(ctx context.Context, id ID) (entity ENTITY, err error) {
 	defer errors.Recover(func(e error) { err = errors.Wrap(e, "param: %v", id) })
 	filter := c.buildFilter(bson.M{c.idField: id})

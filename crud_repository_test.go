@@ -246,6 +246,32 @@ func TestCrudRepository_FindOne_WithOrder(t *testing.T) {
 	assert.Equal(t, foundUser.Name, user1.Name)
 }
 
+func TestCrudRepository_FindOneWithExists(t *testing.T) {
+	db, teardown := getDatabase()
+	defer teardown()
+	userRepository := NewCrudRepository[int64, *User](db.Collection("user"))
+
+	user := User{
+		ID:   idGen.Generate(),
+		Name: "test",
+	}
+	_, err := userRepository.Create(context.Background(), &user)
+	assert.Equal(t, err, nil)
+
+	foundUser, exists, err := userRepository.FindOneWithExists(context.Background(), map[string]any{
+		"name": "test",
+	})
+	assert.Equal(t, err, nil)
+	assert.Equal(t, exists, true)
+	assert.Equal(t, foundUser.Name, user.Name)
+
+	_, exists, err = userRepository.FindOneWithExists(context.Background(), map[string]any{
+		"name": "nonexistent",
+	})
+	assert.Equal(t, err, nil)
+	assert.Equal(t, exists, false)
+}
+
 func TestCrudRepository_FindByID(t *testing.T) {
 	defer errors.Recover(func(e error) { log.Fatalf("TestCrudRepository_FindByID err: %+v", e) })
 	db, teardown := getDatabase()
